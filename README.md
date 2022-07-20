@@ -78,6 +78,7 @@ This command will generate a *name*.ISO file in the folder you ran the command i
 #### Launch QEMU with the OVMF firmware and the ISO image
 Launch QEMU with the following specifications. Replace *name* with the name of your ISO file.
 If your OVMF firmware file is called something other than OVMF.fd, you need to replace OVMF.fd with the name of your firmware file too.
+
 	"C:\Program Files\qemu\qemu-system-x86_64.exe" -cdrom UEFI.ISO -cpu qemu64 -pflash OVMF.fd -L "C:\Program Files\qemu" -net none -monitor stdio
 	
 #### Run the image in QEMU
