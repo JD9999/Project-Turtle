@@ -523,99 +523,6 @@ printErrorString:
 	mov rcx, rax
 	call exit
 
-;*****************************************************************************
-;*** openFileSystem                                                        *** ;TODO This function does not work yet, don't use it!
-;*** Definition: opens a file system for various operations                ***
-;*** Input: rcx is a pointer to a EFI_SYSTEM_FILE_SYSTEM_PROTOCOL object   ***
-;*** Output: rcx is a pointer to an EFI_FILE_PROTOCOL for that file system ***
-;*****************************************************************************
-openFileSystem:
-	;Call the function
-	push rdx
-	push r8
-	push r9
-	push r10
-	push r11
-
-	mov r8, rcx
-	mov rdx, OPEN_VOLUME_FILE_PROTOCOL_HANDLE_ADDRESS
-	add r8, [OFFSET_SIMPLE_FILE_SYSTEM_OPEN_VOLUME]
-	sub rsp, 0x20
-
-	E:
-	jmp E
-
-	call r8
-
-	;Check for errors
-	cmp rax, [EFI_SUCCESS]
-	je OFSend
-
-	cmp rax, [EFI_UNSUPPORTED]
-	jne OFS1
-	mov rcx, unsupportedError
-	jmp OFSerrExit
-
-	OFS1:
-	cmp rax, [EFI_NO_MEDIA]
-	jne OFS2
-	mov rcx, noMediaError
-	jmp OFSerr
-
-	OFS2:
-	cmp rax, [EFI_DEVICE_ERROR]
-	jne OFS3
-	mov rcx, deviceError
-	jmp OFSerr
-
-	OFS3:
-	cmp rax, [EFI_VOLUME_CORRUPTED]
-	jne OFS4
-	mov rcx, volumeCorruptedError
-	jmp OFSerr
-
-	OFS4:
-	cmp rax, [EFI_ACCESS_DENIED]
-	jne OFS5
-	mov rcx, accessDeniedError
-	jmp OFSerr
-
-	OFS5:
-	cmp rax, [EFI_OUT_OF_RESOURCES]
-	jne OFS2
-	mov rcx, outOfResourcesError
-	jmp OFSerrExit
-
-	OFS6:
-	cmp rax, [EFI_MEDIA_CHANGED]
-	jne OFS7
-	mov rcx, mediaChangedError
-	jmp OFSerr
-
-	OFS7:
-	;Unknown error, let's just end the program here...
-	mov rcx, unknownError
-	jmp OFSerrExit
-
-	OFSerr:
-	call printErrorString
-
-	;Return
-	OFSend:
-	add rsp, 0x20
-	mov rcx, [OPEN_VOLUME_FILE_PROTOCOL_HANDLE_ADDRESS]
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rdx
-	ret
-
-	OFSerrExit:
-	call printErrorString
-	mov rcx, rax
-	call exit
-
 
 ;**************************************************************************************************
 ;*** locateHandlesByProtocol [BOOT FUNCTION ONLY]                                               ***
@@ -824,7 +731,6 @@ OFFSET_BOOT_EXIT_PROGRAM dq 216
 OFFSET_BOOT_STALL dq 248
 OFFSET_BOOT_LOCATE_HANDLE_BUFFER dq 312
 OFFSET_CONSOLE_OUTPUT_STRING dq 8
-OFFSET_SIMPLE_FILE_SYSTEM_OPEN_VOLUME dq 8
 
 ;************************
 ;*** Number constants ***
@@ -894,12 +800,6 @@ LOCATE_PROTOCOL_SEARCH_PROTOCOL dq 2
 LOCATE_PROTOCOL_HANDLE_COUNT dq 0
 LOCATE_PROTOCOL_BUFFER_ADDRESS dq 0
 
-;**********************************************
-;*** Stores values related to the UEFI      ***
-;*** Simple File System openVolume function ***
-;**********************************************
-OPEN_VOLUME_FILE_PROTOCOL_HANDLE_ADDRESS dq 0
-
 ;**********************************
 ;*** Strings used for debugging ***
 ;**********************************
@@ -937,11 +837,7 @@ invalidParameterError db __utf16__ `Invalid parameter!\r\n\0`
 unsupportedError db __utf16__ `Command unsupported!\r\n\0`
 deviceError db __utf16__ `Hardware error!\r\n\0`
 outOfResourcesError db __utf16__ `Out of resources!\r\n\0`
-volumeCorruptedError db __utf16__ `Volume is corrupted!\r\n\0`
-noMediaError db __utf16__ `Media does not exist!\r\n\0`
-mediaChangedError db __utf16__ `Media has been changed!\r\n\0`
 notFoundError db __utf16__ `Result not found!\r\n\0`
-accessDeniedError db __utf16__ `Access denied!\r\n\0`
 unknownError db __utf16__ `An unknown error occurred!\r\n\0`
 
 necessaryProtocolMissingError db __utf16__ `A protocol necessary for the operation of Project Turtle is missing!`
