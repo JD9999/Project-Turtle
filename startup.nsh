@@ -1,2 +1,2 @@
 \EFI\BOOT\BOOTX64.efi
-pause
+echo Return code is %lasterror%

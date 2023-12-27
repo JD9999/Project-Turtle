@@ -11,6 +11,72 @@
 	;*** Not needed at the moment.  ***
 	;**********************************
 
+;**************************************************************************************************
+;*** locateHandlesByProtocol [BOOT FUNCTION ONLY]                                               ***
+;*** Definition: provides a list and count of every handle that supports the requested protocol ***
+;*** Input: rcx is the address of the protocol GUID                                             ***
+;*** Output: rcx holds address to the buffer containing the array of handles found              ***
+;***         rdx holds the number of handles with that protocol                                 ***
+;**************************************************************************************************
+locateHandlesByProtocol:
+	;Save registers
+	push r8
+	push r9
+	push r10
+	push r11
+	
+	;Call the function
+	mov rdx, rcx
+	mov rcx, [LOCATE_PROTOCOL_SEARCH_PROTOCOL]
+	mov r8, 0 ;null
+	mov r9, LOCATE_PROTOCOL_HANDLE_COUNT
+	mov r10, LOCATE_PROTOCOL_BUFFER_ADDRESS
+	push r10
+	sub rsp, 0x20
+	call [BOOT_SERVICES_LOCATE_HANDLE_BUFFER]
+
+	;Restore registers
+	add rsp, 0x20
+	pop r10
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	
+	;Prepare return values and return
+	mov rcx, [LOCATE_PROTOCOL_BUFFER_ADDRESS]
+	mov rdx, [LOCATE_PROTOCOL_HANDLE_COUNT]
+	ret
+
+;***************************************************************************
+;*** freeBuffer [BOOT FUNCTION ONLY]                                     ***
+;*** Definition: Frees all of the memory allocated from the buffer given ***
+;*** Input: rcx = pointer to buffer in memory                            ***
+;*** Output: None                                                        ***
+;***************************************************************************
+freeBuffer:
+	;Save registers
+	push rcx
+	push rdx
+	push r8
+	push r9
+	push r10
+	push r11
+	
+	;Call the function
+	sub rsp, 0x28
+	call [BOOT_SERVICES_FREE_POOL]
+
+	;Restore registers
+	add rsp, 0x28
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdx
+	pop rcx
+	ret
+
 ;*******************************************************
 ;*** loadDriver [BOOT FUNCTION ONLY]                 ***
 ;*** Definition: Load an EFI boot driver from a file ***
@@ -77,115 +143,7 @@ loadDriver:
 	LDerrExit:
 	call printErrorString
 	mov rcx, rax
-	call exit
-	
-
-;***************************************************************
-;*** printErrorString                                        ***
-;*** Definition: prints a utf16 string to the error console. ***
-;*** Input: rcx is the address of the start of the string    ***
-;*** Output: none                                            ***
-;***************************************************************
-printErrorString:
-	;Call the function
-	push rcx
-	push rdx
-	push r8
-	push r9
-	push r10
-	push r11
-	mov rdx, rcx
-	mov rcx, [CONERR]
-	sub rsp, 0x28
-	call [CONERR_PRINT_STRING]
-
-	;Check for errors
-	cmp rax, [EFI_SUCCESS]
-	je PESend
-
-	cmp rax, [EFI_WARNING_UNKNOWN_GLYPH]
-	jne PES1
-	mov rcx, unknownGlyphError
-	jmp PESerr
-
-	PES1:
-	cmp rax, [EFI_UNSUPPORTED]
-	jne PES2
-	jmp PESerrExit
-
-	PES2:
-	cmp rax, [EFI_DEVICE_ERROR]
-	jne PES3
-	jmp PESerrExit
-
-	PES3:
-	;Unknown error, let's just end the program here...
-	jmp PESerrExit
-
-	PESerr:
-	call printErrorString
-
-	;Return
-	PESend:
-	add rsp, 0x28
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rdx
-	pop rcx
-	ret
-
-	PESerrExit:
-	mov rcx, rax
-	call exit
-	
-;***************************************************************************
-;*** freeBuffer [BOOT FUNCTION ONLY]                                     ***
-;*** Definition: Frees all of the memory allocated from the buffer given ***
-;*** Input: rcx = pointer to buffer in memory                            ***
-;*** Output: None                                                        ***
-;***************************************************************************
-freeBuffer:
-	;Call the function
-	push rcx
-	push rdx
-	push r8
-	push r9
-	push r10
-	push r11
-	sub rsp, 0x28
-	call [BOOT_SERVICES_FREE_POOL]
-
-	;Check for errors
-	cmp rax, [EFI_SUCCESS]
-	je FBend
-
-	cmp rax, [EFI_INVALID_PARAMETER]
-	jne FB1
-	mov rcx, invalidParameterError
-	jmp FBerrExit
-
-	FB1:
-	;Unknown error, let's just end the program here...
-	mov rcx, unknownError
-	jmp FBerrExit
-
-	;Return
-	FBend:
-	add rsp, 0x28
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rdx
-	pop rcx
-	ret
-
-	FBerrExit:
-	call printErrorString
-	mov rcx, rax
-	call exit
+	call exit	
 
 	;**********************************
 	;******* INSECURE FUNCTIONS *******
@@ -341,175 +299,6 @@ consoleOutputProtocolFromHandle:
 	mov rcx, [HANDLE_PROTOCOL_POINTER_ADDRESS]
 	add rsp, 0x28
 	ret
-
-;*******************************************************
-;*** protocolFromHandle [BOOT FUNCTION ONLY]         ***
-;*** Definition: Look up the address of a particular ***
-;***             protocol in a registered handler    ***
-;*** Input: rcx = the handle                         ***
-;***        rdx = the protocol type to search for    ***
-;*** Output: None                                    ***
-;*******************************************************
-protocolFromHandle:
-	;Call the function
-	sub rsp, 0x28
-	mov r8, HANDLE_PROTOCOL_POINTER_ADDRESS
-	call [BOOT_SERVICES_HANDLE_PROTOCOL]
-
-	;Check for errors
-	cmp rax, [EFI_SUCCESS]
-	je PFHend
-
-	cmp rax, [EFI_INVALID_PARAMETER]
-	jne PFH1
-	call _invalidParameterErrorAndExit
-	jmp PFHend ;Don't think code is called after this, but just in case...
-
-	PFH1:
-	;Unknown error, let's just end the program here...
-	call _unknownErrorAndExit
-	jmp PFHend ;Don't think code is called after this, but just in case...	
-
-	;Return
-	PFHend:
-	add rsp, 0x28
-	ret
-	
-;****************************************************************
-;*** _unknownGlyphError (EFI_WARNING_UNKNOWN_GLYPH)           ***
-;*** Prints the unknownGlyphError string to the error console ***
-;****************************************************************
-_unknownGlyphError:
-	sub rsp, 0x28
-	lea rdx, [unknownGlyphError]
-	call printErrorString
-	add rsp, 0x28
-	ret
-
-;********************************************************************
-;*** _invalidParameterError (EFI_INVALID_PARAMETER)               ***
-;*** Prints the invalidParameterError string to the error console ***
-;********************************************************************
-_invalidParameterError:
-	sub rsp, 0x28
-	lea rdx, [invalidParameterError]
-	call printErrorString
-	add rsp, 0x28
-	ret
-
-;********************************************************************
-;*** _invalidParameterErrorAndExit (EFI_INVALID_PARAMETER)        ***
-;*** Prints the invalidParameterError string to the error console ***
-;*** Also exits the program                                       ***
-;********************************************************************
-_invalidParameterErrorAndExit:
-	sub rsp, 0x28
-	lea rdx, [invalidParameterError]
-	call printErrorString
-	mov rcx, [waitTime]
-	call waitForTime
-	mov rdx, [EFI_INVALID_PARAMETER]
-	call exit
-	add rsp, 0x28
-	ret
-
-;***************************************************************
-;*** _unsupportedErrorAndExit (EFI_UNSUPPORTED)              ***
-;*** Prints the unsupportedError string to the error console ***
-;*** Also exits the program                                  ***
-;***************************************************************
-_unsupportedErrorAndExit:
-	sub rsp, 0x28
-	lea rdx, [unsupportedError]
-	call printErrorString
-	mov rcx, [waitTime]
-	call waitForTime
-	mov rdx, [EFI_UNSUPPORTED]
-	call exit
-	add rsp, 0x28
-	ret
-
-;**********************************************************
-;*** _deviceErrorAndExit (EFI_DEVICE_ERROR)             ***
-;*** Prints the deviceError string to the error console ***
-;*** Also exits the program                             ***
-;**********************************************************
-_deviceErrorAndExit:
-	sub rsp, 0x28
-	lea rdx, [deviceError]
-	call printErrorString
-	mov rcx, [waitTime]
-	call waitForTime
-	mov rdx, [EFI_DEVICE_ERROR]
-	call exit
-	add rsp, 0x28
-	ret
-
-;******************************************************************
-;*** _outOfResourcesErrorAndExit (EFI_OUT_OF_RESOURCES)         ***
-;*** Prints the outOfResourcesError string to the error console ***
-;*** Also exits the program                                     ***
-;******************************************************************
-_outOfResourcesErrorAndExit:
-	sub rsp, 0x28
-	lea rdx, [outOfResourcesError]
-	call printErrorString
-	mov rcx, [waitTime]
-	call waitForTime
-	mov rdx, [EFI_OUT_OF_RESOURCES]
-	call exit
-	add rsp, 0x28
-	ret
-
-;************************************************************
-;*** _notFoundError (EFI_NOT_FOUND)                       ***
-;*** Prints the notFoundError string to the error console ***
-;************************************************************
-_notFoundError:
-	sub rsp, 0x28
-	lea rdx, [notFoundError]
-	call printErrorString
-	add rsp, 0x28
-	ret
-
-;************************************************************
-;*** notFoundErrorAndExit (EFI_NOT_FOUND)                 ***
-;*** Prints the notFoundError string to the error console ***
-;*** Also exits the program                               ***
-;************************************************************
-_notFoundErrorAndExit:
-	sub rsp, 0x28
-	lea rdx, [notFoundError]
-	call printErrorString
-	mov rcx, [waitTime]
-	call waitForTime
-	mov rdx, [EFI_NOT_FOUND]
-	call exit
-	add rsp, 0x28
-	ret
-
-;***********************************************************
-;*** _unknownErrorAndExit (EFI_INCOMPATIBLE_VERSION)     ***
-;*** Prints the unknownError string to the error console ***
-;*** Also exits the program                              ***
-;***                                                     ***
-;*** Since the UEFI specifications have no return code   ***
-;*** for an unknown error, this could only result from a ***
-;*** dodgy UEFI implementation, which is why             ***
-;*** EFI_INCOMPATIBLE_VERSION is the return code.        ***
-;***********************************************************
-_unknownErrorAndExit:
-	sub rsp, 0x28
-	lea rdx, [unknownError]
-	call printErrorString
-	mov rcx, [waitTime]
-	call waitForTime
-	mov rdx, [EFI_INCOMPATIBLE_VERSION] ;There's no unknown error in the UEFI spec,
-					    ;this is not used anywhere else in the application,
-					    ;and may be the root cause of this issue.
-	call exit
-	add rsp, 0x28
-	ret
 	
 ;****************************************************
 ;*** printlnNumber                                ***
@@ -525,78 +314,6 @@ printlnNumber:
 	lea rcx, [nextLine]
 	call printString
 
-	pop rcx
-	ret
-
-;**************************************************
-;*** printNumber                                ***
-;*** Definition: prints a number to the console ***
-;*** Input: rcx is a signed number (max 64-bit) ***
-;*** Output: none                               ***
-;**************************************************
-
-;Note: Maximum number is 9,223,372,036,854,775,807 (or 0x7fffffffffffffff),
-;      minimum number is -9,223,372,036,854,775,808 (or 0xffffffffffffffff)
-printNumber:
-	;Push variables that will be used
-	push rcx
-	push rdx
-	push r8
-
-	;Start with negative sign if number is less than 0
-	cmp rcx, 0
-	jge PNbigStart
-	push rcx
-	sub rsp, 8
-	lea rcx, [negativeSign]
-	call printString
-	add rsp, 8
-	pop rcx
-	neg rcx
-
-	;Remove leading zeroes
-	PNbigStart:
-	mov rax, [maxDivide]
-	mov rdx, 0
-	mov r8, 10
-	PNbig:
-	cmp rcx, rax
-	jge PNnormal
-	idiv r8 ;rax is a tenth of maxDivide
-	jmp PNbig
-
-	;Get number to print
-	PNnormal:
-	mov rdx, rax
-	mov rax, rcx
-	mov rcx, rdx
-	mov rdx, 0
-	idiv rcx
-
-	;Print number digit
-	PNprint:
-	add rax, 0x30
-	mov [currentNumberChar], rax
-	mov r8, rcx
-	lea rcx, [currentNumberChar]
-	call printString
-
-	;Stop printing if there's nothing left to print
-	cmp rdx, 0
-	je PNend
-
-	;More digits to print. Divide the divider by 10
-	mov rcx, rdx
-	mov rax, r8
-	mov rdx, 0
-	mov r8, 10
-	idiv r8 ;rax is the new divider, rcx is the new number, rdx should be 0, r8 is 10
-	jmp PNnormal
-
-	;Pop variables that were used
-	PNend:
-	pop r8
-	pop rdx
 	pop rcx
 	ret
 
@@ -619,70 +336,6 @@ loadedProtocolCount:
 	mov rcx, rdx
 	pop rdx
 	ret
-	
-;****************************************************************
-;*** printString                                              ***
-;*** Definition: prints a utf16 string to the output console. ***
-;*** Input: rcx is the address of the start of the string     ***
-;*** Output: none                                             ***
-;****************************************************************
-printString:
-	;Call the function
-	push rcx
-	push rdx
-	push r8
-	push r9
-	push r10
-	push r11
-	mov rdx, rcx
-	mov rcx, [CONOUT]
-	sub rsp, 0x28
-	call [CONOUT_PRINT_STRING]
-
-	;Check for errors
-	cmp rax, [EFI_SUCCESS]
-	je PSend
-
-	cmp rax, [EFI_WARNING_UNKNOWN_GLYPH]
-	jne PS1
-	mov rcx, unknownGlyphError
-	jmp PSerr
-
-	PS1:
-	cmp rax, [EFI_UNSUPPORTED]
-	jne PS2
-	mov rcx, unsupportedError
-	jmp PSerrExit
-
-	PS2:
-	cmp rax, [EFI_DEVICE_ERROR]
-	jne PS3
-	mov rcx, deviceError
-	jmp PSerrExit
-
-	PS3:
-	;Unknown error, let's just end the program here...
-	mov rcx, unknownError
-	jmp PSerrExit
-
-	PSerr:
-	call printErrorString
-
-	;Return
-	PSend:
-	add rsp, 0x28
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rdx
-	pop rcx
-	ret
-
-	PSerrExit:
-	call printErrorString
-	mov rcx, rax
-	call exit
 	
 ;*****************************************************************************
 ;*** openFileSystem                                                        *** ;TODO This function does not work yet, don't use it!
@@ -773,81 +426,6 @@ openFileSystem:
 	mov rcx, rax
 	call exit
 
-
-;**************************************************************************************************
-;*** locateHandlesByProtocol [BOOT FUNCTION ONLY]                                               ***
-;*** Definition: provides a list and count of every handle that supports the requested protocol ***
-;*** Input: rcx is the address of the protocol GUID                                             ***
-;*** Output: rcx holds address to the buffer containing the array of handles found              ***
-;***         rdx holds the number of handles with that protocol                                 ***
-;**************************************************************************************************
-locateHandlesByProtocol:
-	;Call the function
-	push r8
-	push r9
-	push r10
-	push r11
-	mov rdx, rcx
-	mov rcx, [LOCATE_PROTOCOL_SEARCH_PROTOCOL]
-	mov r8, 0 ;null
-	mov r9, LOCATE_PROTOCOL_HANDLE_COUNT
-	mov r10, LOCATE_PROTOCOL_BUFFER_ADDRESS
-
-	;TODO - Should there be this many push/pop operations?
-	push r8
-	push r9
-	push r10
-	sub rsp, 0x20
-	call [BOOT_SERVICES_LOCATE_HANDLE_BUFFER]
-
-	;Check for errors
-	cmp rax, [EFI_SUCCESS]
-	je LHBPend
-
-	cmp rax, [EFI_INVALID_PARAMETER]
-	jne LHBP1
-	mov rcx, invalidParameterError
-	jmp LHBPerrExit
-
-	LHBP1:
-	cmp rax, [EFI_OUT_OF_RESOURCES]
-	jne LHBP2
-	mov rcx, outOfResourcesError
-	jmp LHBPerrExit
-
-	LHBP2:
-	cmp rax, [EFI_NOT_FOUND]
-	jne LHBP3
-	mov rcx, notFoundError
-	jmp LHBPerr
-
-	LHBP3:
-	;Unknown error, let's just end the program here...
-	mov rcx, unknownError
-	jmp LHBPerrExit
-
-	LHBPerr:
-	call printErrorString
-
-	;Return
-	LHBPend:
-	;TODO - Should there be this many push/pop operations?
-	add rsp, 0x20
-	pop r10
-	pop r9
-	pop r8
-	mov rcx, [LOCATE_PROTOCOL_BUFFER_ADDRESS]
-	mov rdx, [LOCATE_PROTOCOL_HANDLE_COUNT]
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	ret
-
-	LHBPerrExit:
-	call printErrorString
-	mov rcx, rax
-	call exit
 	
 			;**********************************
 			;******** EXTRA VARIABLES *********
@@ -864,12 +442,8 @@ locateHandlesByProtocol:
 OFFSET_BOOT_FREE_POOL dq 72
 OFFSET_BOOT_LOCATE_HANDLE_BUFFER dq 312
 OFFSET_SIMPLE_FILE_SYSTEM_OPEN_VOLUME dq 8
-
-;************************
-;*** Number constants ***
-;************************
-maxDivide dq 1000000000000000000 ;highest 64-bit divide
-base10 dq 10 ;Dividing by 10 gets a base 10 digit
+OFFSET_BOOT_STALL dq 248
+BOOT_SERVICES_STALL dq 0
 			
 ;*****************************************
 ;*** The full list of EFI function     ***
@@ -884,9 +458,9 @@ EFI_DEVICE_ERROR dq 0x8000000000000007
 EFI_OUT_OF_RESOURCES dq 0x8000000000000009
 EFI_VOLUME_CORRUPTED dq 0x800000000000000a
 EFI_NO_MEDIA dq 0x800000000000000c
-EFI_MEDIA_CHANGED dq 0x800000000000000d ;Obviously one of these two is wrong!
-EFI_NOT_FOUND dq 0x800000000000000d ;Obviously one of these two is wrong!
-EFI_ACCESS_DENIED dq 0x800000000000000e
+EFI_MEDIA_CHANGED dq 0x800000000000000d
+EFI_NOT_FOUND dq 0x800000000000000e
+EFI_ACCESS_DENIED dq 0x800000000000000f
 EFI_INCOMPATIBLE_VERSION dq 0x8000000000000019 ;used in this application to represent unknown errors!
 EFI_SECURITY_VIOLATION dq 0x8000000000000001a
 
@@ -896,8 +470,6 @@ EFI_SECURITY_VIOLATION dq 0x8000000000000001a
 ;***************************************
 BOOT_SERVICES_FREE_POOL dq 0
 BOOT_SERVICES_LOCATE_HANDLE_BUFFER dq 0
-CONERR_PRINT_STRING dq 0
-CONOUT_PRINT_STRING dq 0
 
 ;**********************************
 ;*** The full list of protocol  ***
@@ -921,7 +493,7 @@ GUID_EFI_EBC_PROTOCOL			dd 0x13AC6DD1
 ;*** Stores values related to the     ***
 ;*** UEFI LocateHandleBuffer function ***
 ;****************************************
-LOCATE_PROTOCOL_SEARCH_PROTOCOL dq 2
+LOCATE_PROTOCOL_SEARCH_PROTOCOL dw 2
 LOCATE_PROTOCOL_HANDLE_COUNT dq 0
 LOCATE_PROTOCOL_BUFFER_ADDRESS dq 0
 
@@ -938,15 +510,6 @@ debug1 db __utf16__ `Debug 1!\r\n\0`
 debug2 db __utf16__ `Debug 2!\r\n\0`
 debug3 db __utf16__ `Debug 3!\r\n\0`
 debug4 db __utf16__ `Debug 4!\r\n\0`
-
-;*****************************************
-;*** Strings used for printing numbers ***
-;*****************************************
-nextLine db __utf16__ `\r\n\0`
-negativeSign db __utf16__ `-\0`
-zeroNumber db 0x30 ;Convert number to character that represents this number
-currentNumberChar db __utf16__ `0\0`
-db __utf16__ `0\0` ;Needed to allow the following string to exist.
 
 ;***************************************
 ;*** Strings used for displaying     ***

@@ -1,6 +1,8 @@
 @echo off
 nasm -f bin kernel.asm -o BOOTX64.efi
+nasm -f bin helper.asm -o turtle.efi
 xcopy /y BOOTX64.efi "Drive\EFI\BOOT"
+xcopy /y turtle.efi "Drive\EFI"
 choice /n /m "Should we copy the image to a USB drive? [Y/N]:"
 PAUSE
 if %errorlevel%==1 (
@@ -22,3 +24,4 @@ if %errorlevel%==1 (
 )
 
 echo All done!
+PAUSE

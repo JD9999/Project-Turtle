@@ -1,0 +1,5 @@
+# No compiled binaries
+*.efi
+
+# Not the drive
+Drive/
