@@ -1,5 +1,9 @@
 # No compiled binaries
 *.efi
 
-# Not the drive
+# None of the folders consisting of compiled binaries
 Drive/
+Releases/
+
+# No Github personal access tokens!
+token*

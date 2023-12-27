@@ -7,8 +7,9 @@ However, using this program would bypass an operating system entirely, completel
 It would also make for an extremely light-weight purpose-built system.
 
 ## How close is it to the goal?
-Not very far. Currently, the program can print some strings.
+Not very far. The current progress is that the application can print strings and numbers, get information about itself (EFI LOADED IMAGE) and can use the device path utilities protocol to get the size of the device path of the loaded image.
 
+The next step is to get it to be able to load and start the second EFI file from the first. This will enable the application to be modular (and therefore, relatively easier to navigate and develop with)
 
 # How do I setup Project Turtle?
 There are multiple options for you:
@@ -23,8 +24,8 @@ Don't want any hassle with code or scripts? No problem! Follow these steps to tr
 3. If the "EFI" folder is in a directory like "D:/Project-Turtle-A0.0.1_Release", change it so that the "EFI" folder is in the root directory
 
 ## 2. Run it on QEMU
-Before starting this process, make sure that you have [the NASM compiler](nasm.us) and [QEMU](www.qemu.org) installed on your machine
-Use our buildAndRunFull script to run it on QEMU:
+Before starting this process, make sure that you have [the NASM compiler](nasm.us) and the [QEMU](www.qemu.org) virtual machine installed on your machine
+Use the buildAndRunFull script to run it on QEMU:
 1. Download the source code (git clone https://github.com/JD9999/Project-Turtle)
 2. Run the buildAndRunFull script (.bat for Windows, .sh for Linux)
 3. When asked about copying it to a USB, type "N" and press enter
@@ -33,7 +34,7 @@ Use our buildAndRunFull script to run it on QEMU:
 
 ## 3. Copy it to a USB drive
 Before starting this process, make sure that you have [the NASM compiler](nasm.us) installed on your machine
-Use our buildAndRunFull script to run it on QEMU:
+Use the buildAndRunFull script to copy it onto your USB drive:
 1. Download the source code (git clone https://github.com/JD9999/Project-Turtle)
 2. Run the buildAndRunFull script (.bat for Windows, .sh for Linux)
 3. When asked about copying it to a USB, type "Y" and press enter
