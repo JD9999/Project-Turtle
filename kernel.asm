@@ -155,6 +155,11 @@ mov rdx, [rcx]
 mov [ADDRESS_BOOT_SERVICES_EXIT], rdx
 
 mov rcx, [ADDRESS_BOOT_SERVICES]
+add rcx, [OFFSET_BOOT_FREE_POOL] ;get free pool function from boot services table
+mov rdx, [rcx]
+mov [ADDRESS_BOOT_SERVICES_FREE_POOL], rdx
+
+mov rcx, [ADDRESS_BOOT_SERVICES]
 add rcx, [OFFSET_BOOT_LOAD_IMAGE] ;get load image function from boot services table
 mov rdx, [rcx]
 mov [ADDRESS_BOOT_SERVICES_LOAD_IMAGE], rdx
@@ -217,7 +222,7 @@ printErrorString:
 mov rdx, errorHello
 call printString
 cmp rax, [RETURN_SUCCESS]
-jne exitWithError
+jne exit
 
 ;Now that I have printed with the output and the error console, I will not check for errors on the consoles anymore, just assume that they work
 
@@ -230,6 +235,34 @@ cmp rax, [RETURN_SUCCESS]
 jne exitWithError
 mov [ADDRESS_LOADED_IMAGE], rcx
 
+;Get the device path
+mov rcx, [ADDRESS_LOADED_IMAGE]
+add rcx, [OFFSET_LOADED_IMAGE_DEVICE_PATH]
+mov rcx, [rcx]
+mov [ADDRESS_DEVICE_PATH], rcx
+
+;Attempt to get an instance of the device path to text protocol. Note that this is an optional protocol, and therefore may not be present on the system
+mov rcx, GUID_EFI_DEVICE_PATH_TO_TEXT_PROTOCOL
+call locateProtocol
+cmp rax, [RETURN_NOT_FOUND]
+je getDevicePathUtilitiesProtocol
+cmp rax, [RETURN_SUCCESS]
+jne exitWithError
+mov [ADDRESS_DEVICE_PATH_TO_TEXT_PROTOCOL], rcx
+
+;We have it, so lets print the device path!
+mov rcx, [ADDRESS_DEVICE_PATH_TO_TEXT_PROTOCOL]
+add rcx, [OFFSET_DEVICE_PATH_TO_TEXT_CONVERT_PATH]
+mov rcx, [rcx]
+mov [ADDRESS_DEVICE_PATH_TO_TEXT_PROTOCOL_CONVERT_PATH_TO_TEXT], rcx
+mov rcx, [ADDRESS_DEVICE_PATH]
+mov rdx, [ADDRESS_CONOUT]
+call printDevicePath
+mov rcx, rdx
+mov rdx, newLine
+call printString
+
+getDevicePathUtilitiesProtocol:
 ;Get an instance of the device path utilities protocol
 mov rcx, GUID_EFI_DEVICE_PATH_UTILITIES_PROTOCOL
 call locateProtocol
@@ -240,9 +273,7 @@ mov rcx, [rcx]
 mov [ADDRESS_DEVICE_PATH_UTILITIES_PROTOCOL_GET_DEVICE_PATH_SIZE], rcx
 
 ;Print the size of the loaded image device path
-mov rcx, [ADDRESS_LOADED_IMAGE]
-add rcx, [OFFSET_LOADED_IMAGE_DEVICE_PATH]
-mov rcx, [rcx]
+mov rcx, [ADDRESS_DEVICE_PATH]
 call getDevicePathSize
 cmp rax, [RETURN_SUCCESS]
 jne exitWithError
@@ -437,6 +468,42 @@ printNumber:
 	pop rcx
 	pop rax
 	ret
+	
+;**************************************************
+;*** printDevicePath				***
+;*** Definition: Prints a given device path	***
+;*** Input: rcx is a pointer to a device path	***
+;***        rdx is the console to print to	***
+;*** Output: none				***
+;**************************************************
+printDevicePath:
+	;Push variables that will be used
+	push rcx
+	push rdx
+	push r8
+	
+	mov r8, rdx
+	mov rdx, 0
+	call convertDevicePathToText
+	cmp rax, [RETURN_SUCCESS]
+	jne exitWithError
+	
+	mov rdx, rcx
+	mov rcx, r8
+	call printString
+	
+	mov rcx, rdx
+	call freeBuffer
+	cmp rax, [RETURN_SUCCESS]
+	je PDPend
+	call warnWithError
+
+	PDPend:
+	;Pop variables that were used
+	pop r8
+	pop rdx
+	pop rcx
+	ret	
 
 ;******************************************************************
 ;***		USER-ACCESSIBLE LOW-LEVEL FUNCTIONS		***
@@ -456,7 +523,7 @@ printNumber:
 ;******************************************************************
 ;*** printString						***
 ;*** Definition: Prints a utf16 string to the output console.	***
-;*** Input: rcx is the console to print to			***
+;*** Input: rcx is the address of the console to print to	***
 ;***        rdx is the address of the start of the string 	***
 ;*** Output: none						***
 ;******************************************************************
@@ -591,6 +658,78 @@ locateProtocol:
 	
 	;Prepare return values and return
 	mov rcx, [BUFFER_LOCATED_PROTOCOL]
+	ret
+	
+;**************************************************************************
+;*** convertDevicePathToText						***
+;*** Definition: gets a textual representation of a given device path	***
+;*** Input: rcx is a pointer to a device path				***
+;***	    rdx is a boolean indicating if the device path should be	***
+;***        simplified for printing (but unusuable for anything else)	***
+;*** Output: rcx holds a pointer to a buffer. The caller must use	***
+;***         freeBuffer once they are done with the buffer's content!	***
+;**************************************************************************
+convertDevicePathToText:
+	;Save registers
+	push rdx
+	push r8
+	push r9
+	push r10
+	push r11
+	
+	;Call the function
+	mov r8, rdx ;AllowShortcuts will be the same value as DisplayOnly
+	sub rsp, 0x20
+	call [ADDRESS_DEVICE_PATH_TO_TEXT_PROTOCOL_CONVERT_PATH_TO_TEXT]
+
+	;Restore registers
+	add rsp, 0x20
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdx
+	
+	;Prepare return values and return
+	mov rcx, rax	
+	cmp rax, 0
+	jne CDPTTyay	
+	mov rax, [RETURN_INVALID_ARGUMENT]
+	jmp CDPTTend
+	
+	CDPTTyay:
+	mov rax, [RETURN_SUCCESS]
+	
+	CDPTTend:
+	ret
+	
+;***************************************************************************
+;*** freeBuffer [BOOT FUNCTION ONLY]                                     ***
+;*** Definition: Frees all of the memory allocated from the buffer given ***
+;*** Input: rcx = pointer to buffer in memory                            ***
+;*** Output: None                                                        ***
+;***************************************************************************
+freeBuffer:
+	;Save registers
+	push rcx
+	push rdx
+	push r8
+	push r9
+	push r10
+	push r11
+	
+	;Call the function
+	sub rsp, 0x28
+	call [ADDRESS_BOOT_SERVICES_FREE_POOL]
+
+	;Restore registers
+	add rsp, 0x28
+	pop r11
+	pop r10
+	pop r9
+	pop r8
+	pop rdx
+	pop rcx
 	ret
 	
 ;******************************************************************
@@ -784,12 +923,14 @@ OFFSET_SYSTEM_TABLE_OUTPUT_CONSOLE dq 64
 ;****************************************
 ADDRESS_BOOT_SERVICES dq 0
 ADDRESS_BOOT_SERVICES_EXIT dq 0 ;This one exits the program, not just stop boot services!
+ADDRESS_BOOT_SERVICES_FREE_POOL dq 0
 ADDRESS_BOOT_SERVICES_LOAD_IMAGE dq 0
 ADDRESS_BOOT_SERVICES_LOCATE_PROTOCOL dq 0
 ADDRESS_BOOT_SERVICES_OPEN_PROTOCOL dq 0
 ADDRESS_BOOT_SERVICES_STALL dq 0
 ADDRESS_BOOT_SERVICES_START_IMAGE dq 0
 OFFSET_BOOT_EXIT_PROGRAM dq 216
+OFFSET_BOOT_FREE_POOL dq 72
 OFFSET_BOOT_LOAD_IMAGE dq 200
 OFFSET_BOOT_OPEN_PROTOCOL dq 280
 OFFSET_BOOT_LOCATE_PROTOCOL dq 320
@@ -807,9 +948,13 @@ OFFSET_CONSOLE_SET_ATTRIBUTE dq 40
 ;********************************************
 ;*** Other protocol addresses and offsets ***
 ;********************************************
+ADDRESS_DEVICE_PATH dq 0
+ADDRESS_DEVICE_PATH_TO_TEXT_PROTOCOL dq 0
+ADDRESS_DEVICE_PATH_TO_TEXT_PROTOCOL_CONVERT_PATH_TO_TEXT dq 0
 ADDRESS_DEVICE_PATH_UTILITIES_PROTOCOL dq 0
 ADDRESS_DEVICE_PATH_UTILITIES_PROTOCOL_GET_DEVICE_PATH_SIZE dq 0
 ADDRESS_LOADED_IMAGE dq 0
+OFFSET_DEVICE_PATH_TO_TEXT_CONVERT_PATH dq 8
 OFFSET_LOADED_IMAGE_DEVICE_PATH dq 32
 
 ;*******************************************
@@ -824,6 +969,9 @@ BUFFER_START_IMAGE_DATA dq 0
 ;*************
 ;*** GUIDs ***
 ;*************
+GUID_EFI_DEVICE_PATH_TO_TEXT_PROTOCOL		dd 0x8b843e20
+						dw 0x8132, 0x4852
+						db 0x90, 0xcc, 0x55, 0x1a, 0x4e, 0x4a, 0x7f, 0x1c
 GUID_EFI_DEVICE_PATH_UTILITIES_PROTOCOL	dd 0x0379be4e
 						dw 0xd706, 0x437d
 						db 0xb0, 0x37, 0xed, 0xb8, 0x2f, 0xb7, 0x72, 0xa4
@@ -839,6 +987,7 @@ GUID_EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL		dd 0x387477c2
 ;*********************************
 RETURN_SUCCESS dq 0
 RETURN_INVALID_ARGUMENT dq 0x8000000000000002
+RETURN_NOT_FOUND dq 0x800000000000000E
 
 ;*********************************
 ;*** Masks for packed integers ***
